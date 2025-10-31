@@ -1,0 +1,317 @@
+from types import FunctionType
+from typing import Union
+
+import autograd.numpy as anp
+import autograd.scipy.special as asps
+
+from ..custom import bvn_cdf, s_bvn_cdf
+from ..types import AGDType, AGNumeric, AGRandomState, Int
+from . import Numeric, dispatch
+from .custom import autograd_register
+
+__all__ = []
+
+
+@dispatch
+def isabstract(a: Numeric):
+    return False
+
+
+@dispatch
+def _jit_run(
+    f: FunctionType,
+    compilation_cache: dict,
+    jit_kw_args: dict,
+    *args: Union[Numeric, AGRandomState],
+    **kw_args
+):
+    # There is no JIT for AutoGrad, so just run the function.
+    return f(*args, **kw_args)
+
+
+@dispatch
+def isnan(a: Numeric):
+    return anp.isnan(a)
+
+
+@dispatch
+def real(a: Numeric):
+    return anp.real(a)
+
+
+@dispatch
+def imag(a: Numeric):
+    return anp.imag(a)
+
+
+@dispatch
+def device(a: AGNumeric):
+    return "cpu"
+
+
+@dispatch
+def to_active_device(a: AGNumeric):
+    return a
+
+
+@dispatch
+def cast(dtype: AGDType, a: AGNumeric):
+    # AutoGrad does not respect the `copy` flag, so check that manually.
+    if dtype == a.dtype:
+        return a
+    else:
+        return a.astype(dtype)
+
+
+@dispatch
+def identity(a: Numeric):
+    return 1 * a
+
+
+@dispatch
+def round(a: Numeric):
+    return anp.round(a)
+
+
+@dispatch
+def floor(a: Numeric):
+    return anp.floor(a)
+
+
+@dispatch
+def ceil(a: Numeric):
+    return anp.ceil(a)
+
+
+@dispatch
+def negative(a: Numeric):
+    return anp.negative(a)
+
+
+@dispatch
+def abs(a: Numeric):
+    return anp.abs(a)
+
+
+@dispatch
+def sign(a: Numeric):
+    return anp.sign(a)
+
+
+@dispatch
+def sqrt(a: Numeric):
+    return anp.sqrt(a)
+
+
+@dispatch
+def exp(a: Numeric):
+    return anp.exp(a)
+
+
+@dispatch
+def log(a: Numeric):
+    return anp.log(a)
+
+
+@dispatch
+def log1p(a: Numeric):
+    return anp.log1p(a)
+
+
+@dispatch
+def sin(a: Numeric):
+    return anp.sin(a)
+
+
+@dispatch
+def arcsin(a: Numeric):
+    return anp.arcsin(a)
+
+
+@dispatch
+def cos(a: Numeric):
+    return anp.cos(a)
+
+
+@dispatch
+def arccos(a: Numeric):
+    return anp.arccos(a)
+
+
+@dispatch
+def tan(a: Numeric):
+    return anp.tan(a)
+
+
+@dispatch
+def arctan(a: Numeric):
+    return anp.arctan(a)
+
+
+@dispatch
+def tanh(a: Numeric):
+    return anp.tanh(a)
+
+
+@dispatch
+def arctanh(a: Numeric):
+    return anp.arctanh(a)
+
+
+@dispatch
+def loggamma(a: Numeric):
+    return asps.gammaln(a)
+
+
+@dispatch
+def erf(a: Numeric):
+    return asps.erf(a)
+
+
+@dispatch
+def add(a: Numeric, b: Numeric):
+    return anp.add(a, b)
+
+
+@dispatch
+def subtract(a: Numeric, b: Numeric):
+    return anp.subtract(a, b)
+
+
+@dispatch
+def multiply(a: Numeric, b: Numeric):
+    return anp.multiply(a, b)
+
+
+@dispatch
+def divide(a: Numeric, b: Numeric):
+    return anp.divide(a, b)
+
+
+@dispatch
+def power(a: Numeric, b: Numeric):
+    return anp.power(a, b)
+
+
+@dispatch
+def minimum(a: Numeric, b: Numeric):
+    return anp.minimum(a, b)
+
+
+@dispatch
+def maximum(a: Numeric, b: Numeric):
+    return anp.maximum(a, b)
+
+
+@dispatch
+def min(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.min(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def argmin(a: Numeric, axis: Union[Int, None] = None):
+    return anp.argmin(a, axis=axis)
+
+
+@dispatch
+def max(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.max(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def argmax(a: Numeric, axis: Union[Int, None] = None):
+    return anp.argmax(a, axis=axis)
+
+
+@dispatch
+def sum(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.sum(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def prod(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.prod(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def mean(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.mean(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def std(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.std(a, axis=axis, ddof=0, keepdims=not squeeze)
+
+
+@dispatch
+def all(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.all(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def any(a: Numeric, axis: Union[Int, None] = None, squeeze: bool = True):
+    return anp.any(a, axis=axis, keepdims=not squeeze)
+
+
+@dispatch
+def lt(a: Numeric, b: Numeric):
+    return anp.less(a, b)
+
+
+@dispatch
+def le(a: Numeric, b: Numeric):
+    return anp.less_equal(a, b)
+
+
+@dispatch
+def gt(a: Numeric, b: Numeric):
+    return anp.greater(a, b)
+
+
+@dispatch
+def ge(a: Numeric, b: Numeric):
+    return anp.greater_equal(a, b)
+
+
+@dispatch
+def eq(a: Numeric, b: Numeric):
+    return anp.equal(a, b)
+
+
+@dispatch
+def ne(a: Numeric, b: Numeric):
+    return anp.not_equal(a, b)
+
+
+_bvn_cdf = autograd_register(bvn_cdf, s_bvn_cdf)
+
+
+@dispatch
+def bvn_cdf(a: Numeric, b: Numeric, c: Numeric):
+    return _bvn_cdf(a, b, c)
+
+
+@dispatch
+def where(condition: Numeric, a: Numeric, b: Numeric):
+    return anp.where(condition, a, b)
+
+
+@dispatch
+def sort(a: Numeric, axis: Int = -1, descending: bool = False):
+    if descending:
+        return -anp.sort(-a, axis=axis)
+    else:
+        return anp.sort(a, axis=axis)
+
+
+@dispatch
+def argsort(a: Numeric, axis: Int = -1, descending: bool = False):
+    if descending:
+        return anp.argsort(-a, axis=axis)
+    else:
+        return anp.argsort(a, axis=axis)
+
+
+@dispatch
+def quantile(a: Numeric, q: Numeric, axis: Union[Int, None] = None):  # pragma: no cover
+    raise NotImplementedError("Function `quantile` is not available for AutoGrad.")
