@@ -2,6 +2,7 @@
 import os
 import base64
 import traceback
+import json
 import customtkinter as ctk
 from tkinter import filedialog, messagebox, simpledialog
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -9,7 +10,6 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
 
 ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("blue")
@@ -36,6 +36,7 @@ def generate_rsa_keypair(key_size: int = 2048):
     public_key = private_key.public_key()
     return private_key, public_key
 
+
 def save_private_key_to_pem(private_key, filepath: str, password: bytes = None):
     encryption = BestAvailableEncryption(password) if password else serialization.NoEncryption()
     pem = private_key.private_bytes(
@@ -46,6 +47,7 @@ def save_private_key_to_pem(private_key, filepath: str, password: bytes = None):
     with open(filepath, 'wb') as f:
         f.write(pem)
 
+
 def save_public_key_to_pem(public_key, filepath: str):
     pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
@@ -54,15 +56,18 @@ def save_public_key_to_pem(public_key, filepath: str):
     with open(filepath, 'wb') as f:
         f.write(pem)
 
+
 def load_private_key_from_pem(filepath: str, password: bytes = None):
     with open(filepath, 'rb') as f:
         data = f.read()
     return serialization.load_pem_private_key(data, password=password, backend=default_backend())
 
+
 def load_public_key_from_pem(filepath: str):
     with open(filepath, 'rb') as f:
         data = f.read()
     return serialization.load_pem_public_key(data, backend=default_backend())
+
 
 # RSA basic ops
 def rsa_encrypt(public_key, plaintext: bytes) -> bytes:
@@ -75,6 +80,7 @@ def rsa_encrypt(public_key, plaintext: bytes) -> bytes:
         )
     )
 
+
 def rsa_decrypt(private_key, ciphertext: bytes) -> bytes:
     return private_key.decrypt(
         ciphertext,
@@ -85,12 +91,14 @@ def rsa_decrypt(private_key, ciphertext: bytes) -> bytes:
         )
     )
 
+
 def rsa_sign(private_key, message: bytes) -> bytes:
     return private_key.sign(
         message,
         padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
         hashes.SHA256()
     )
+
 
 def rsa_verify(public_key, message: bytes, signature: bytes) -> bool:
     try:
@@ -117,6 +125,7 @@ def hybrid_encrypt(public_key, data: bytes) -> dict:
         "ciphertext": base64.b64encode(ciphertext).decode('utf-8')
     }
 
+
 def hybrid_decrypt(private_key, envelope: dict) -> bytes:
     encrypted_key = base64.b64decode(envelope["key"])
     aes_key = rsa_decrypt(private_key, encrypted_key)
@@ -130,12 +139,14 @@ def hybrid_decrypt(private_key, envelope: dict) -> bytes:
 AUTO_PRIV = os.path.join(KEY_DIR, "private_auto.pem")
 AUTO_PUB = os.path.join(KEY_DIR, "public_auto.pem")
 
+
 def auto_save_keys(private_key, public_key, password: bytes = None):
     try:
         save_private_key_to_pem(private_key, AUTO_PRIV, password=password)
         save_public_key_to_pem(public_key, AUTO_PUB)
     except Exception:
         pass
+
 
 def auto_load_keys():
     priv = None
@@ -146,7 +157,8 @@ def auto_load_keys():
                 priv = load_private_key_from_pem(AUTO_PRIV, password=None)
             except Exception:
                 # Si está cifrada, pedimos contraseña
-                pwd = simpledialog.askstring("Contraseña", "Ingrese la contraseña para la clave privada (auto):", show='*')
+                pwd = simpledialog.askstring("Contraseña", "Ingrese la contraseña para la clave privada (auto):",
+                                             show='*')
                 if pwd is not None:
                     priv = load_private_key_from_pem(AUTO_PRIV, password=pwd.encode('utf-8'))
         if os.path.exists(AUTO_PUB):
@@ -155,6 +167,39 @@ def auto_load_keys():
         # Si falla la carga automática no interrumpimos
         pass
     return priv, pub
+
+
+# Función para descifrar archivos
+def decrypt_file(private_key):
+    if not private_key:
+        messagebox.showwarning('Atención', 'No hay clave privada cargada.')
+        return
+
+    filepath = filedialog.askopenfilename(
+        title="Seleccionar archivo cifrado (.enc.json)",
+        filetypes=[('Archivos cifrados', '*.enc.json'), ('Todos los archivos', '*.*')]
+    )
+    if not filepath:
+        return
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            envelope = json.load(f)
+
+        plaintext = hybrid_decrypt(private_key, envelope)
+
+        save_path = filedialog.asksaveasfilename(
+            title="Guardar archivo descifrado",
+            defaultextension='.decrypted'
+        )
+        if save_path:
+            with open(save_path, 'wb') as f:
+                f.write(plaintext)
+            messagebox.showinfo("Éxito", f"Archivo descifrado guardado en:\n{save_path}")
+
+    except Exception as e:
+        traceback.print_exc()
+        messagebox.showerror('Error', f'Error al descifrar archivo: {str(e)}')
 
 
 class RSAApp(ctk.CTk):
@@ -230,7 +275,6 @@ class RSAApp(ctk.CTk):
         ctk.CTkLabel(footer_frame, text="© 2024 RSA Security Tool",
                      text_color=COLORS["dark"], font=("Arial", 10)).pack(expand=True, pady=10)
 
-
     def _build_keys_tab(self):
         frame = self.notebook.tab("🔑 Generar Claves")
         frame.configure(fg_color=COLORS["card"])
@@ -269,11 +313,11 @@ class RSAApp(ctk.CTk):
                      font=("Arial", 14, "bold"), text_color=COLORS["dark"]).pack(pady=10)
 
         self.priv_status = ctk.CTkLabel(status_frame, text="🔒 Clave Privada: NO CARGADA",
-                                        text_color=COLORS["danger"], font=("Arial", 12))
+                                        text_color=COLORS["danger"], font=("Arial", 12))  # ← CORREGIDO
         self.priv_status.pack(pady=5)
 
         self.pub_status = ctk.CTkLabel(status_frame, text="🔓 Clave Pública: NO CARGADA",
-                                       text_color=COLORS["danger"], font=("Arial", 12))
+                                       text_color=COLORS["danger"], font=("Arial", 12))  # ← CORREGIDO
         self.pub_status.pack(pady=5)
 
         action_frame = ctk.CTkFrame(container, fg_color=COLORS["card"])
@@ -299,7 +343,6 @@ class RSAApp(ctk.CTk):
         if self.public_key:
             self.pub_status.configure(text="✅ Pública: CARGADA (auto)", text_color=COLORS["success"])
 
-
     def generate_keys(self):
         try:
             key_size = int(self.keysize_var.get())
@@ -318,7 +361,9 @@ class RSAApp(ctk.CTk):
             messagebox.showwarning('Atención', 'No hay clave privada cargada.')
             return
         # Preguntar si quiere proteger con contraseña
-        pwd = simpledialog.askstring("Contraseña (opcional)", "Ingrese contraseña para proteger la clave privada (dejar vacío = sin contraseña):", show='*')
+        pwd = simpledialog.askstring("Contraseña (opcional)",
+                                     "Ingrese contraseña para proteger la clave privada (dejar vacío = sin contraseña):",
+                                     show='*')
         filepath = filedialog.asksaveasfilename(defaultextension='.pem', title="Guardar Clave Privada")
         if filepath:
             try:
@@ -345,14 +390,18 @@ class RSAApp(ctk.CTk):
                 messagebox.showerror('Error', f'No se pudo guardar la clave pública: {str(e)}')
 
     def load_private_key(self):
-        filepath = filedialog.askopenfilename(filetypes=[('PEM files', '*.pem')], title="Cargar Clave Privada")
+        filepath = filedialog.askopenfilename(
+            filetypes=[('PEM files', '*.pem'), ('Todos los archivos', '*.*')],
+            title="Cargar Clave Privada"
+        )
         if filepath:
             try:
                 # Intentar sin contraseña
                 try:
                     self.private_key = load_private_key_from_pem(filepath, password=None)
                 except Exception:
-                    pwd = simpledialog.askstring("Contraseña", "La clave está protegida. Ingrese la contraseña:", show='*')
+                    pwd = simpledialog.askstring("Contraseña", "La clave está protegida. Ingrese la contraseña:",
+                                                 show='*')
                     if pwd is None:
                         return
                     self.private_key = load_private_key_from_pem(filepath, password=pwd.encode('utf-8'))
@@ -368,7 +417,10 @@ class RSAApp(ctk.CTk):
                 messagebox.showerror('Error', f'Error al cargar la clave privada: {str(e)}')
 
     def load_public_key(self):
-        filepath = filedialog.askopenfilename(filetypes=[('PEM files', '*.pem')], title="Cargar Clave Pública")
+        filepath = filedialog.askopenfilename(
+            filetypes=[('PEM files', '*.pem'), ('Todos los archivos', '*.*')],
+            title="Cargar Clave Pública"
+        )
         if filepath:
             try:
                 self.public_key = load_public_key_from_pem(filepath)
@@ -382,7 +434,6 @@ class RSAApp(ctk.CTk):
             except Exception as e:
                 traceback.print_exc()
                 messagebox.showerror('Error', f'Error al cargar la clave pública: {str(e)}')
-
 
     def _build_encrypt_tab(self):
         frame = self.notebook.tab("📧 Cifrar/Descifrar")
@@ -424,12 +475,19 @@ class RSAApp(ctk.CTk):
                       fg_color=COLORS["warning"], height=35).grid(row=0, column=2, padx=5, pady=5, sticky="ew")
 
         # Botones para archivos
-        ctk.CTkButton(btn_frame, text="📁 Cifrar Archivo", command=self.encrypt_file,
-                      fg_color=COLORS["secondary"], height=35).grid(row=1, column=0, columnspan=3, padx=5, pady=8, sticky="ew")
+        file_btn_frame = ctk.CTkFrame(container, fg_color=COLORS["card"])
+        file_btn_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
+        file_btn_frame.grid_columnconfigure(0, weight=1)
+        file_btn_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(file_btn_frame, text="📁 Cifrar Archivo", command=self.encrypt_file,
+                      fg_color=COLORS["secondary"], height=35).grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        ctk.CTkButton(file_btn_frame, text="📁 Descifrar Archivo", command=self.decrypt_file,
+                      fg_color=COLORS["secondary"], height=35).grid(row=0, column=1, padx=5, pady=5, sticky="ew")
 
         # Salida
         output_frame = ctk.CTkFrame(container, fg_color=COLORS["card"])
-        output_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
+        output_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=10)
         output_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(output_frame, text="📄 Texto Cifrado/Envelope (Base64 JSON):",
@@ -441,8 +499,7 @@ class RSAApp(ctk.CTk):
 
         # Limpiar campos
         ctk.CTkButton(container, text="🧹 Limpiar Campos", command=self.clear_encrypt_fields,
-                      fg_color=COLORS["danger"], height=36).grid(row=4, column=0, padx=10, pady=8, sticky="e")
-
+                      fg_color=COLORS["danger"], height=36).grid(row=5, column=0, padx=10, pady=8, sticky="e")
 
     def open_text_file_for_encrypt(self):
         filepath = filedialog.askopenfilename(filetypes=[('Text files', '*.txt'), ('All files', '*.*')])
@@ -471,10 +528,8 @@ class RSAApp(ctk.CTk):
                 "nonce": envelope["nonce"],
                 "ciphertext": envelope["ciphertext"]
             }
-            # mostrar como JSON base64-friendly (string)
-            import json as _json
             self.output_text.delete('0.0', 'end')
-            self.output_text.insert('0.0', _json.dumps(envelope_json))
+            self.output_text.insert('0.0', json.dumps(envelope_json, indent=2))
         except Exception as e:
             traceback.print_exc()
             messagebox.showerror('Error', f'Error al cifrar: {str(e)}')
@@ -488,15 +543,15 @@ class RSAApp(ctk.CTk):
             if not raw:
                 messagebox.showwarning('Atención', 'No hay texto cifrado en la salida.')
                 return
-            import json as _json
-            envelope = _json.loads(raw)
+
+            envelope = json.loads(raw)
             plaintext = hybrid_decrypt(self.private_key, envelope)
             self.input_text.delete('0.0', 'end')
             try:
                 self.input_text.insert('0.0', plaintext.decode('utf-8'))
             except Exception:
                 # si no es texto UTF-8, mostrar info
-                self.input_text.insert('0.0', plaintext)
+                self.input_text.insert('0.0', f"[Datos binarios descifrados - {len(plaintext)} bytes]")
         except Exception as e:
             traceback.print_exc()
             messagebox.showerror('Error', f'Error al descifrar: {str(e)}')
@@ -512,20 +567,22 @@ class RSAApp(ctk.CTk):
             with open(filepath, "rb") as f:
                 data = f.read()
             envelope = hybrid_encrypt(self.public_key, data)
-            import json as _json
             save_path = filedialog.asksaveasfilename(defaultextension='.enc.json', title="Guardar archivo cifrado")
             if save_path:
                 with open(save_path, "w", encoding="utf-8") as out:
-                    _json.dump(envelope, out)
+                    json.dump(envelope, out, indent=2)
                 messagebox.showinfo("Éxito", f"Archivo cifrado guardado en:\n{save_path}")
         except Exception as e:
             traceback.print_exc()
             messagebox.showerror('Error', f'Error al cifrar archivo: {str(e)}')
 
+    def decrypt_file(self):
+        """Descifrar archivo completo"""
+        decrypt_file(self.private_key)
+
     def clear_encrypt_fields(self):
         self.input_text.delete('0.0', 'end')
         self.output_text.delete('0.0', 'end')
-
 
     def _build_sign_tab(self):
         frame = self.notebook.tab("✍️ Firmar/Verificar")
@@ -581,7 +638,6 @@ class RSAApp(ctk.CTk):
         ctk.CTkButton(container, text="🧹 Limpiar Firmas", command=self.clear_sign_fields,
                       fg_color=COLORS["danger"], height=36).grid(row=4, column=0, padx=10, pady=8, sticky="e")
 
-
     def open_file_for_sign(self):
         filepath = filedialog.askopenfilename(filetypes=[('All files', '*.*')])
         if filepath:
@@ -620,7 +676,7 @@ class RSAApp(ctk.CTk):
             messagebox.showwarning('Atención', 'No hay mensaje para firmar.')
             return
         try:
-            signature = rsa_sign(self.private_key, data)
+            signature = rsa_sign(self.private_key, data)  # ← CORREGIDO
             self.signature_text.delete('0.0', 'end')
             self.signature_text.insert('0.0', base64.b64encode(signature).decode('utf-8'))
             messagebox.showinfo('Éxito', 'Firma generada y mostrada en el cuadro de Firma.')
@@ -662,7 +718,6 @@ class RSAApp(ctk.CTk):
         self.signature_text.delete('0.0', 'end')
         if hasattr(self, "_last_binary_to_sign"):
             delattr(self, "_last_binary_to_sign")
-
 
     def toggle_theme(self):
         mode = ctk.get_appearance_mode()
